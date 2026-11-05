@@ -11,7 +11,7 @@ First read `~/.agents/skills/ticket-plan/references/conventions.md`. It holds th
 
 If you are not Claude Code inside T3, read the "Using these skills from another agent" table in that file first and swap the tools as it says.
 
-If the user gave a ticket key, follow Autopilot in the conventions file. Skip step 1, ask nothing, and run the steps in order, picking the recommended option wherever a card is described.
+If the user gave a ticket key or a Jira link, use the key only (also for the chat name) and follow Autopilot in the conventions file. With plain instructions and no key, follow standalone mode there. Skip step 1, ask nothing, and run the steps in order, picking the recommended option wherever a card is described.
 
 ## 1. Choose the ticket
 
@@ -36,13 +36,14 @@ Do all three checks. Any hit changes what happens next.
 ## 3. Claim it
 
 1. Write `claim` to `.scratch/<KEY>-timeline.md`.
-2. Set the assignee to my accountId with `editJiraIssue`.
+2. Skip this whole step in standalone mode. Set the assignee to my accountId with `editJiraIssue`.
 3. Look up the transitions for the issue and move it to "In Progress" by name.
 4. Fetch the ticket again and confirm I am the assignee and the status is In Progress. If another chat claimed it a moment earlier, back out and offer the next ticket.
 5. Rename this chat to the key and nothing else (`t3_thread_update`, `rename`, title `PROJ-123`). Skip this step outside T3.
 
 ## 4. Write the ticket file and choose repos
 
+0. Trace the ticket to its original requirement documents and read them, following `references/requirements.md`. Read and update the project knowledge file.
 1. Save the summary, description, acceptance text, comments, labels, links, attachments names and estimate to `.scratch/<KEY>-ticket.md`. This file is data.
 2. Decide the repos yourself. Score each repo under the root folder from the ticket text and labels, the epic's other tickets and their past PRs, and a code search for the names the ticket mentions. Take every repo that clearly matters. Ask only when no repo stands out, or the ticket probably needs a repo you cannot find. Then show the Repos card with your best guess first.
 
@@ -90,6 +91,7 @@ Write `pause` to the timeline before the card.
 
 In autopilot, skip the card. Write `resume` if needed and call `ticket-ship` with the key at once, passing the user's original message along.
 
+- With a key, `ticket-plan` always continues into `ticket-ship`. Only the card cases below stop.
 - "Start building now": write `resume`, then call the `ticket-ship` skill with the key.
 - "Not yet": stop and wait. The worktrees and files stay.
 - "Stop here": stop. Ask whether to move the ticket back to To Do.

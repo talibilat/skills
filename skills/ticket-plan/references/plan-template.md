@@ -11,6 +11,8 @@ Repeat bug: no            (bug-reproduced sets this to yes and adds the two sect
 Budget: <estimate or 4h>   Plan estimate: <hours>   Jira estimate: <hours or none>
 Repos: <repo list>
 
+Requirements used: <document, version and date, one line each. Knowledge file path.>
+
 ## Blockers and open questions
 <None, or a numbered list. Each item says who can unblock it.>
 
@@ -18,7 +20,7 @@ Repos: <repo list>
 <2 to 4 sentences in plain words.>
 
 ## Acceptance criteria
-1. <each one written so a test or a command can check it>
+1. <each one written so a test or a command can check it. Say which requirement document line it comes from.>
 
 ## Reproduction (bugs only)
 <Steps. Test path or script path. The failing output. Root cause, once known.>

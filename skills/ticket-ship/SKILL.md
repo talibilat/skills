@@ -1,26 +1,30 @@
 ---
 name: ticket-ship
-description: Build a planned Jira ticket with parallel Sonnet sub-agents in its worktree, re-check the bug, run four code reviewers (pstack interrogate, postwork, ponytail-review, thermo-nuclear) and then an aqa QA review, and score the result out of 100, require a passing live test (browser or real run, or steps for the user), loop on fixes, then raise the PR with screenshot or API proof, comment in Jira, archive the worktree, watch the PR cheaply until it is merged (CI every 10 minutes, then approvals and comments every hour, resolving every comment), and move the ticket to Code Review with a worklog. Use after ticket-plan, or when the user asks to implement or ship a ticket that already has a plan in .scratch.
+description: Build a planned Jira ticket with parallel Sonnet sub-agents in its worktree, re-check the bug, run four code reviewers (pstack interrogate, postwork, ponytail-review, thermo-nuclear) and then an aqa QA review, and score the result out of 100, require a passing live test (browser or real run, or steps for the user), loop on fixes, then raise the PR with screenshot or API proof, comment in Jira, archive the worktree, watch the PR cheaply until it is merged (CI every 10 minutes, then approvals and comments every hour, resolving every comment), and move the ticket to Code Review with a worklog. Works alone: give it a Jira key, or plain instructions, and it plans first when no plan exists. Also use it after ticket-plan.
 ---
 
 # ticket-ship
 
-Turn an approved plan into a merged-quality PR. Work only inside the ticket's worktree. The user's message with the call outranks everything here (see "Your message comes first" in the conventions file).
+Turn a ticket, or a plan, or a plain request into a merged-quality PR. Work only inside the ticket's worktree. The user's message with the call outranks everything here (see "Your message comes first" in the conventions file).
 
 First read `~/.agents/skills/ticket-plan/references/conventions.md`. Read `references/live-test.md` before step 4, `references/review-loop.md` before steps 5 and 6, and `references/closeout.md` before step 7.
 
 If you are not Claude Code inside T3, read the "Using these skills from another agent" table in that file first and swap the tools as it says.
 
-## 0. Recap and go
+## 0. Get ready and go
 
-Input is a ticket key. With no key, list `.scratch/*-plan.md` and ask which one.
+This skill needs nothing done before it. Look at what exists, make what is missing, then build.
 
-Read `<KEY>-ticket.md`, `<KEY>-plan.md` and `<KEY>-timeline.md`. Confirm the worktree exists. If it was archived, recreate it from the branch with `git worktree add <path> <branch>`.
+1. Take the key from the call (a Jira link counts, use the key only). No key and plain instructions means standalone mode from the conventions file.
+2. Look for `.scratch/<KEY>-ticket.md`, `<KEY>-plan.md`, `<KEY>-timeline.md` and the worktree.
+   - All present: this ran after `ticket-plan`. Reuse them.
+   - Plan missing: run `ticket-plan` for this key (read its `SKILL.md` and follow it, in autopilot) up to the end of its step 8, then continue here. That covers the claim, the chat rename to the key, the requirements, the worktrees, the baseline, the bug repro and the plan. Do not hand off back and forth.
+   - Plan present but the worktree was archived: recreate it from the branch with `git worktree add <path> <branch>`.
+   - Standalone mode: write the same files with the task slug, and write the plan from the user's text and what the code shows.
+3. Read the requirement documents and the knowledge file (`references/requirements.md` in `ticket-plan`). Check the plan against them. A plan written before a requirement changed is replanned first.
+4. Recap in about 5 lines when you ran straight after `ticket-plan`. Otherwise explain the plan in plain words (what changes, why, how we check it) and add one Mermaid diagram.
 
-- Run straight after `ticket-plan`: give a recap of about 5 lines.
-- Run on its own: explain the plan in plain words (what changes, why, how we check it) and add one Mermaid diagram.
-
-Show a "Go (Recommended)", "Adjust the plan", "Stop" card only when this skill runs on its own with no key and no instructions. Write `pause` before it and `resume` after it. Run from `ticket-plan`, or with a key, start building at once.
+Show a "Go (Recommended)", "Adjust the plan", "Stop" card only when the user gave no key and no instructions. Write `pause` before it and `resume` after it. Otherwise start building at once.
 
 ## 1. Build
 
@@ -57,8 +61,8 @@ Nothing passes without a live test. Follow `references/live-test.md`. Run the ch
 
 Follow `references/review-loop.md`. Four reviewers, one combined score out of 100, a phase 2 plan for every failed round, and these hard stops:
 
-- Round 2 still failing: write the diagnosis, correct the plan, then run round 3 without asking.
-- Round 3 still failing: stop and show the diagnosis with a card. Do not start round 4.
+- Round 2 still failing: write the diagnosis and correct the plan, then keep going.
+- Up to 5 rounds run without asking while each round makes progress. Stop with the diagnosis card when the loop is stuck (same finding back after two fixes, no score gain for two rounds, a fix undoes an earlier one) or round 5 fails. Do not start round 6.
 - The user's overrun flag from the conventions file applies throughout.
 
 The code review loop ends when the combined score is 100, postwork says PASS, and the live test passed on the final commit. Every fix round changes the code, so run step 4 again after it. The QA review in step 6 comes next.
@@ -73,6 +77,7 @@ Follow `references/closeout.md`. Do not start it without a PASS in `<KEY>-live-t
 
 ## Never
 
+- Never skip the requirement documents. Re-check them when the loop is stuck.
 - Never let a sub-agent commit or push.
 - Never edit outside the plan's files without a written reason.
 - Never run a bigger model without a card.

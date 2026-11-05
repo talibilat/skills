@@ -30,6 +30,7 @@ This applies to every ticket type (Bug, Story, Task).
 ### 1.1 Context discovery (mandatory, before any testing)
 
 - Always find the parent chain: parent Task, Story, Epic. Do this even when the description does not mention a parent.
+- Read the original requirement documents (Confluence pages, attachments, links) as `~/.agents/skills/ticket-plan/references/requirements.md` says, and the project knowledge file it names. Use the newest approved version and say which one. Update the knowledge file with anything new you find.
 - Read every parent and governing ticket. Extract every AC and requirement from each of them, not only from the ticket under validation.
 - Check each of those ACs against the implementation. Any AC from a parent or governing ticket that this ticket's scope affects is checked and reported on its own line.
 - Read the parent epic and all its child stories and tasks to understand the full context.

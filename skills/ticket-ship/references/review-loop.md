@@ -18,7 +18,7 @@ Target: Cursor `auto-smart` on `cost` first. A Cursor error or limit means run t
 Brief for every reviewer, with paths and no pasted text:
 
 ```
-Review the change in <worktree path> against origin/dev. Ticket: <path>. Plan: <path>.
+Review the change in <worktree path> against origin/dev. Ticket: <path>. Plan: <path>. Requirements and knowledge: <~/.agents/ticket-knowledge/<EPIC>.md>. Judge the change against the original requirements, not only the ticket.
 Read <the reviewer's SKILL.md path, found as above> and follow it, with these overrides:
 - Review only. Do not edit, stage, commit or push anything.
 - Do not rename the chat. Do not ask the user questions.
@@ -81,14 +81,18 @@ Start a fresh builder per independent group (Sonnet medium, at most 3 at once). 
 
 ## Round limits
 
+Up to 5 rounds run without asking the user, as long as each round moves in the right direction. Moving in the right direction means the score goes up, or the open findings are new ones and fewer than before.
+
 - Round 1 fails: phase 2 plan, fix, round 2.
 - Round 2 fails: stop fixing. Write the diagnosis, then correct the plan.
   - Do the same findings come back, or new ones each time?
   - Is the plan wrong, is the ticket unclear, or is a fix aimed at a symptom?
+  - Did the requirement documents say something the plan missed?
   - Is a reviewer demanding something outside the ticket?
   - Which single change removes the cause?
 
-  Show the diagnosis in 6 lines or fewer, then run round 3 with the corrected plan.
-- Round 3 fails: stop. Show the diagnosis and a card: "Re-plan", "Ship with follow-ups", "I'll take over". Wait for the answer.
+  Show the diagnosis in 6 lines or fewer, then run the next round with the corrected plan.
+- Rounds 3 to 5: fix, re-run, and diagnose again after each failure.
+- Stuck means any of these: the same finding comes back after two fixes, the score has not gone up for two rounds in a row, a fix breaks something an earlier round fixed, or round 5 fails. When stuck, stop and show the diagnosis and a card: "Re-plan", "Ship with follow-ups", "I'll take over". Wait for the answer.
 
 Append each round's diagnosis and result to `<KEY>-reviews.md`.
