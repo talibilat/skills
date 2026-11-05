@@ -48,6 +48,28 @@ Show this table in chat and append it to `.scratch/<KEY>-reviews.md`:
 
 Then: `Combined score: <n>/100`, the postwork score and gate on one line, and `Live test: PASS | FAIL | NOT RUN (commit <sha>)`.
 
+## QA review (after the code reviewers pass)
+
+Start it only when the four code reviewers have no verified in-scope findings, postwork says PASS, and the live test passed on the current commit.
+
+Start one `delegate_task` child (role `review`, Claude Sonnet medium). Do not send it to Cursor: it runs the app and creates test data. Brief, with paths and no pasted text:
+
+```
+Run the aqa skill in pipeline mode for <KEY>. Read ~/.agents/skills/aqa/SKILL.md and follow it.
+Worktree: <path>. Ticket: <path>. Plan: <path>. Live test: <path>. Evidence folder: <path>.
+Write the full report to <.scratch/<KEY>-reviews/aqa-r<N>.md>. Reply with the TL;DR, the verdict and the failing items in 25 lines or fewer.
+```
+
+Afterward, run the same `git status --porcelain` check as for the code reviewers.
+
+Handle the verdict:
+
+- **Done, or Done with notes.** The QA review passes. Notes and Low-only items go to the Follow-ups list. Add an `aqa` row to the table with the verdict as its gate.
+- **Stays open / back to dev.** Check each failing item yourself, like any finding. An AC marked Fail counts as High. A Partial AC counts as Medium. A drafted bug counts by its priority: Highest 25, High 10, Medium 5, Low 2. Verified items go into the phase 2 plan. This is a failed round. After the fix, run steps 2 to 4 of the skill, re-run the code reviewers that had findings, then run the QA review again.
+- **Needs BA input.** Stop. Show the ambiguous or conflicting requirement and ask the user, even in autopilot.
+
+Bug drafts for problems outside this ticket go to the Follow-ups list and the final message. Never file them in Jira from the loop. Offer to file them, and file only after the user confirms.
+
 ## Phase 2 plan (every round below 100)
 
 Show a short plan in chat before touching code:

@@ -1,6 +1,6 @@
 # Close out
 
-Start only when the combined score is 100 and `<KEY>-live-test.md` shows PASS for the current commit, with an evidence file for every step.
+Start only when the combined score is 100, `<KEY>-live-test.md` shows PASS for the current commit with an evidence file for every step, and the `aqa` verdict is Done or Done with notes.
 
 Each step below is on the conventions file's "Never ask" list, so none of them needs a card.
 
@@ -38,10 +38,10 @@ PR body headings:
 <One image or transcript per live test step, each with a one-line caption saying what it shows. Screenshots for UI changes, a screenshot of the browser inspector or response for things only visible there, a request and response transcript for APIs. For bugs, a before image next to the after image.>
 
 ## Checked
-<Baseline against result. The live test table from <KEY>-live-test.md. Review scores from <KEY>-reviews.md.>
+<Baseline against result. The live test table from <KEY>-live-test.md. Review scores from <KEY>-reviews.md. The aqa verdict and TL;DR from <KEY>-reviews/aqa-r<N>.md.>
 
 ## Known limits
-<Risks, and the Follow-ups list from the reviewers. Note that the evidence branch evidence/<KEY> can be deleted after merge.>
+<Risks, the Follow-ups list from the reviewers, and any bug drafts from aqa that are outside this ticket. Note that the evidence branch evidence/<KEY> can be deleted after merge.>
 
 ## Earlier work              (bug-reproduced tickets only)
 <Old ticket key, old PR number, and why it came back.>

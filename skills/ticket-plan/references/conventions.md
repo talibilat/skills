@@ -30,6 +30,7 @@ Autopilot stops, and asks or reports, in only these cases:
 - an Ask first item that the user did not name in the call
 - the bug will not reproduce after the timebox
 - the live test needs the user to run it
+- the QA verdict is Needs BA input
 - the overrun flag, or a review loop that fails its third round
 - a bigger model is needed
 
@@ -64,6 +65,7 @@ These skills call other skills. Find one by looking for `<name>/SKILL.md` under 
 | Reviewer: checks the work against the ticket | `postwork` | Mark the reviewer NOT RUN |
 | Reviewer: correctness, safety, lean code | `ponytail-review` | Mark the reviewer NOT RUN |
 | Reviewer: strict maintainability | `thermo-nuclear-code-quality-review` | Mark the reviewer NOT RUN |
+| QA review after the code reviewers | `aqa` (same repo) | Mark the QA review NOT RUN |
 | Plan check | `ticket-prework-review`, pstack `blast-radius` | Skip that part and say so |
 | Bug repro | `diagnosing-bugs`, `tdd` | Do the loop by hand |
 | PR failures | `pr-review-and-recovery`, `fix-ci`, `fix-merge-conflicts` | Do it by hand |

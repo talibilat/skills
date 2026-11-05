@@ -1,13 +1,13 @@
 ---
 name: ticket-ship
-description: Build a planned Jira ticket with parallel Sonnet sub-agents in its worktree, re-check the bug, run four reviewers (pstack interrogate, postwork, ponytail-review, thermo-nuclear) and score the result out of 100, require a passing live test (browser or real run, or steps for the user), loop on fixes, then raise the PR with screenshot or API proof, comment in Jira, archive the worktree, watch the PR cheaply until it is merged (CI every 10 minutes, then approvals and comments every hour, resolving every comment), and move the ticket to Code Review with a worklog. Use after ticket-plan, or when the user asks to implement or ship a ticket that already has a plan in .scratch.
+description: Build a planned Jira ticket with parallel Sonnet sub-agents in its worktree, re-check the bug, run four code reviewers (pstack interrogate, postwork, ponytail-review, thermo-nuclear) and then an aqa QA review, and score the result out of 100, require a passing live test (browser or real run, or steps for the user), loop on fixes, then raise the PR with screenshot or API proof, comment in Jira, archive the worktree, watch the PR cheaply until it is merged (CI every 10 minutes, then approvals and comments every hour, resolving every comment), and move the ticket to Code Review with a worklog. Use after ticket-plan, or when the user asks to implement or ship a ticket that already has a plan in .scratch.
 ---
 
 # ticket-ship
 
 Turn an approved plan into a merged-quality PR. Work only inside the ticket's worktree. The user's message with the call outranks everything here (see "Your message comes first" in the conventions file).
 
-First read `~/.agents/skills/ticket-plan/references/conventions.md`. Read `references/live-test.md` before step 4, `references/review-loop.md` before step 5 and `references/closeout.md` before step 6.
+First read `~/.agents/skills/ticket-plan/references/conventions.md`. Read `references/live-test.md` before step 4, `references/review-loop.md` before steps 5 and 6, and `references/closeout.md` before step 7.
 
 If you are not Claude Code inside T3, read the "Using these skills from another agent" table in that file first and swap the tools as it says.
 
@@ -61,9 +61,13 @@ Follow `references/review-loop.md`. Four reviewers, one combined score out of 10
 - Round 3 still failing: stop and show the diagnosis with a card. Do not start round 4.
 - The user's overrun flag from the conventions file applies throughout.
 
-The loop ends when the combined score is 100, postwork says PASS, and the live test passed on the final commit. Every fix round changes the code, so run step 4 again after it.
+The code review loop ends when the combined score is 100, postwork says PASS, and the live test passed on the final commit. Every fix round changes the code, so run step 4 again after it. The QA review in step 6 comes next.
 
-## 6. Close out
+## 6. QA review
+
+After the code reviewers pass, run the `aqa` skill in pipeline mode as a fifth check. It reads the parent chain, checks every acceptance criterion, reviews code and logs, runs the extra positive, negative and edge scenarios, and gives a verdict. Follow the "QA review" section of `references/review-loop.md`. A verdict of "Stays open" goes back into the phase 2 plan and counts as a failed round. "Needs BA input" stops the work and shows the question, even in autopilot. Move on only on "Done" or "Done with notes".
+
+## 7. Close out
 
 Follow `references/closeout.md`. Do not start it without a PASS in `<KEY>-live-test.md` for the current commit. It ends only when the PR is merged. In order: publish proof, push, open the PR, comment in Jira, archive and delete the worktree, watch the PR with the cheap status script, fix CI, resolve every comment, move the ticket to Code Review and log work, then keep watching until it merges.
 
@@ -74,5 +78,6 @@ Follow `references/closeout.md`. Do not start it without a PASS in `<KEY>-live-t
 - Never run a bigger model without a card.
 - Never call the work done below 100.
 - Never pass, push or open a PR without a live test PASS and proof on the current commit.
+- Never close out without a QA verdict of "Done" or "Done with notes".
 - Never merge the PR yourself.
 - Never poll an agent. Watch PRs only the way `references/closeout.md` says.
