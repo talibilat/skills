@@ -1,17 +1,17 @@
 ---
 name: talib-ticket-plan
-description: Pick the best To Do Jira ticket with question cards, claim it, rename the chat to the ticket key, set up a git worktree, reproduce bugs, and write a checked plan with a plain-language brief. Use when the user asks to pick, grab or plan the next Jira ticket, or names a ticket key to plan. Hands off to talib-ticket-ship.
+description: Pick the best To Do Jira ticket with question cards, claim it, rename the chat to the ticket key, set up a git worktree, reproduce bugs, and write a checked plan with a plain-language brief. Use when the user asks to pick, grab or plan the next Jira ticket, or names a ticket key to plan. A ticket key in the call means no questions: it starts the work. Hands off to talib-ticket-ship.
 ---
 
 # talib-ticket-plan
 
 Pick a ticket, claim it, prepare the ground and write the plan. Do not change code except the failing repro test.
 
-First read `~/.agents/skills/talib-ticket-plan/references/conventions.md`. It holds the Jira ids, repos, branch and PR naming, time rules, token rules and the ask-first list. Card layouts are in `references/cards.md`. The plan layout and handoff brief are in `references/plan-template.md`.
+First read `~/.agents/skills/talib-ticket-plan/references/conventions.md`. It holds the Jira ids, repos, branch and PR naming, time rules, token rules and the ask-first list. The user's message with the call outranks everything here (see "Your message comes first" in that file). Card layouts are in `references/cards.md`. The plan layout and handoff brief are in `references/plan-template.md`.
 
 If you are not Claude Code inside T3, read the "Using these skills from another agent" table in that file first and swap the tools as it says.
 
-If the user gave a ticket key, skip step 1 and start at step 2.
+If the user gave a ticket key, follow Autopilot in the conventions file. Skip step 1, ask nothing, and run the steps in order, picking the recommended option wherever a card is described.
 
 ## 1. Choose the ticket
 
@@ -31,7 +31,7 @@ Do all three checks. Any hit changes what happens next.
    - `ls <root>/*-worktrees <root>/archived-worktrees`
    - `gh pr list -R <org>/<repo> --search "<KEY>" --state all --json number,title,state,headRefName`
 
-   An open PR or a live branch owned by someone else counts as taken. A merged PR, a closed PR or an archive folder means earlier work. Show the "Repeat bug" card. If the user picks the bug-reproduced flow, call the `talib-bug-reproduced` skill with the key and stop here.
+   An open PR or a live branch owned by someone else counts as taken. A merged PR, a closed PR or an archive folder means earlier work. Show the "Repeat bug" card, or in autopilot choose the bug-reproduced flow without asking. When it is chosen, call the `talib-bug-reproduced` skill with the key and stop here.
 
 ## 3. Claim it
 
@@ -82,11 +82,13 @@ Post in chat, in this order:
 1. Blockers and open questions, or "No blockers".
 2. The plan, trimmed to the sections a person needs: problem, approach, subparts, baseline, risks.
 3. The plain-language brief from the template. It is part of this chat message, not a separate file.
-4. The handoff card.
+4. The handoff card (not in autopilot).
 
 Write `pause` to the timeline before the card.
 
 ## 10. Hand off
+
+In autopilot, skip the card. Write `resume` if needed and call `talib-ticket-ship` with the key at once, passing the user's original message along.
 
 - "Start building now": write `resume`, then call the `talib-ticket-ship` skill with the key.
 - "Not yet": stop and wait. The worktrees and files stay.

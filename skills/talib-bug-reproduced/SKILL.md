@@ -13,7 +13,7 @@ Same flow as `talib-ticket-plan`, plus a history check and a different plan. Rea
 
 If you are not Claude Code inside T3, read the "Using these skills from another agent" table in that file first and swap the tools as it says.
 
-Input: the new ticket key, and optionally the old key. With no key, start at step 1 of `talib-ticket-plan` and let the user pick.
+Input: the new ticket key, and optionally the old key. With a key, run in autopilot: ask nothing and follow the Autopilot section of the conventions file. The user's message with the call outranks everything here. With no key, start at step 1 of `talib-ticket-plan` and let the user pick.
 
 ## Steps
 

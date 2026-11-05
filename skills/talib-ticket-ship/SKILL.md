@@ -5,7 +5,7 @@ description: Build a planned Jira ticket with parallel Sonnet sub-agents in its 
 
 # talib-ticket-ship
 
-Turn an approved plan into a merged-quality PR. Work only inside the ticket's worktree.
+Turn an approved plan into a merged-quality PR. Work only inside the ticket's worktree. The user's message with the call outranks everything here (see "Your message comes first" in the conventions file).
 
 First read `~/.agents/skills/talib-ticket-plan/references/conventions.md`. Read `references/live-test.md` before step 4, `references/review-loop.md` before step 5 and `references/closeout.md` before step 6.
 
@@ -20,7 +20,7 @@ Read `<KEY>-ticket.md`, `<KEY>-plan.md` and `<KEY>-timeline.md`. Confirm the wor
 - Run straight after `talib-ticket-plan`: give a recap of about 5 lines.
 - Run on its own: explain the plan in plain words (what changes, why, how we check it) and add one Mermaid diagram.
 
-Then show a card: "Go (Recommended)", "Adjust the plan", "Stop". Write `pause` before it and `resume` after it.
+Show a "Go (Recommended)", "Adjust the plan", "Stop" card only when this skill runs on its own with no key and no instructions. Write `pause` before it and `resume` after it. Run from `talib-ticket-plan`, or with a key, start building at once.
 
 ## 1. Build
 
