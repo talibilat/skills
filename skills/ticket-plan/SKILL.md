@@ -1,13 +1,13 @@
 ---
-name: talib-ticket-plan
-description: Pick the best To Do Jira ticket with question cards, claim it, rename the chat to the ticket key, set up a git worktree, reproduce bugs, and write a checked plan with a plain-language brief. Use when the user asks to pick, grab or plan the next Jira ticket, or names a ticket key to plan. A ticket key in the call means no questions: it starts the work. Hands off to talib-ticket-ship.
+name: ticket-plan
+description: Pick the best To Do Jira ticket with question cards, claim it, rename the chat to the ticket key, set up a git worktree, reproduce bugs, and write a checked plan with a plain-language brief. Use when the user asks to pick, grab or plan the next Jira ticket, or names a ticket key to plan. A ticket key in the call means no questions: it starts the work. Hands off to ticket-ship.
 ---
 
-# talib-ticket-plan
+# ticket-plan
 
 Pick a ticket, claim it, prepare the ground and write the plan. Do not change code except the failing repro test.
 
-First read `~/.agents/skills/talib-ticket-plan/references/conventions.md`. It holds the Jira ids, repos, branch and PR naming, time rules, token rules and the ask-first list. The user's message with the call outranks everything here (see "Your message comes first" in that file). Card layouts are in `references/cards.md`. The plan layout and handoff brief are in `references/plan-template.md`.
+First read `~/.agents/skills/ticket-plan/references/conventions.md`. It holds the Jira ids, repos, branch and PR naming, time rules, token rules and the ask-first list. The user's message with the call outranks everything here (see "Your message comes first" in that file). Card layouts are in `references/cards.md`. The plan layout and handoff brief are in `references/plan-template.md`.
 
 If you are not Claude Code inside T3, read the "Using these skills from another agent" table in that file first and swap the tools as it says.
 
@@ -31,7 +31,7 @@ Do all three checks. Any hit changes what happens next.
    - `ls <root>/*-worktrees <root>/archived-worktrees`
    - `gh pr list -R <org>/<repo> --search "<KEY>" --state all --json number,title,state,headRefName`
 
-   An open PR or a live branch owned by someone else counts as taken. A merged PR, a closed PR or an archive folder means earlier work. Show the "Repeat bug" card, or in autopilot choose the bug-reproduced flow without asking. When it is chosen, call the `talib-bug-reproduced` skill with the key and stop here.
+   An open PR or a live branch owned by someone else counts as taken. A merged PR, a closed PR or an archive folder means earlier work. Show the "Repeat bug" card, or in autopilot choose the bug-reproduced flow without asking. When it is chosen, call the `bug-reproduced` skill with the key and stop here.
 
 ## 3. Claim it
 
@@ -51,7 +51,7 @@ Do all three checks. Any hit changes what happens next.
 For each repo from step 4:
 
 1. `git -C <repo> fetch origin dev`. Use the repo's own default branch if it is not `dev`.
-2. Handle what already exists without asking. A worktree for this key on a branch that is unmerged and holds no one else's commits is resumed as it is, so skip the next item. A branch that is merged, or has a closed PR, is earlier work, so switch to `talib-bug-reproduced`. Ask only when the branch holds commits by someone else.
+2. Handle what already exists without asking. A worktree for this key on a branch that is unmerged and holds no one else's commits is resumed as it is, so skip the next item. A branch that is merged, or has a closed PR, is earlier work, so switch to `bug-reproduced`. Ask only when the branch holds commits by someone else.
 3. Otherwise run `git -C <repo> worktree add -b <branch> <root>/<repo>-worktrees/<KEY> origin/dev`.
 4. Run the install command from the conventions table inside the worktree. Use `npm ci` and `uv sync`, never an upgrade.
 
@@ -88,9 +88,9 @@ Write `pause` to the timeline before the card.
 
 ## 10. Hand off
 
-In autopilot, skip the card. Write `resume` if needed and call `talib-ticket-ship` with the key at once, passing the user's original message along.
+In autopilot, skip the card. Write `resume` if needed and call `ticket-ship` with the key at once, passing the user's original message along.
 
-- "Start building now": write `resume`, then call the `talib-ticket-ship` skill with the key.
+- "Start building now": write `resume`, then call the `ticket-ship` skill with the key.
 - "Not yet": stop and wait. The worktrees and files stay.
 - "Stop here": stop. Ask whether to move the ticket back to To Do.
 

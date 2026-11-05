@@ -1,4 +1,4 @@
-# Cards for talib-ticket-plan
+# Cards for ticket-plan
 
 A card is one `AskUserQuestion` call. Each card holds up to 4 questions, each with 2 to 4 options. The tool adds a free-text "Other" box. Headers are 12 characters or fewer.
 

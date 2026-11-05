@@ -1,13 +1,13 @@
 ---
-name: talib-ticket-ship
-description: Build a planned Jira ticket with parallel Sonnet sub-agents in its worktree, re-check the bug, run four reviewers (pstack interrogate, postwork, ponytail-review, thermo-nuclear) and score the result out of 100, require a passing live test (browser or real run, or steps for the user), loop on fixes, then raise the PR, comment in Jira, archive the worktree, wait for the PR to be good and move the ticket to Code Review with a worklog. Use after talib-ticket-plan, or when the user asks to implement or ship a ticket that already has a plan in .scratch.
+name: ticket-ship
+description: Build a planned Jira ticket with parallel Sonnet sub-agents in its worktree, re-check the bug, run four reviewers (pstack interrogate, postwork, ponytail-review, thermo-nuclear) and score the result out of 100, require a passing live test (browser or real run, or steps for the user), loop on fixes, then raise the PR, comment in Jira, archive the worktree, wait for the PR to be good and move the ticket to Code Review with a worklog. Use after ticket-plan, or when the user asks to implement or ship a ticket that already has a plan in .scratch.
 ---
 
-# talib-ticket-ship
+# ticket-ship
 
 Turn an approved plan into a merged-quality PR. Work only inside the ticket's worktree. The user's message with the call outranks everything here (see "Your message comes first" in the conventions file).
 
-First read `~/.agents/skills/talib-ticket-plan/references/conventions.md`. Read `references/live-test.md` before step 4, `references/review-loop.md` before step 5 and `references/closeout.md` before step 6.
+First read `~/.agents/skills/ticket-plan/references/conventions.md`. Read `references/live-test.md` before step 4, `references/review-loop.md` before step 5 and `references/closeout.md` before step 6.
 
 If you are not Claude Code inside T3, read the "Using these skills from another agent" table in that file first and swap the tools as it says.
 
@@ -17,10 +17,10 @@ Input is a ticket key. With no key, list `.scratch/*-plan.md` and ask which one.
 
 Read `<KEY>-ticket.md`, `<KEY>-plan.md` and `<KEY>-timeline.md`. Confirm the worktree exists. If it was archived, recreate it from the branch with `git worktree add <path> <branch>`.
 
-- Run straight after `talib-ticket-plan`: give a recap of about 5 lines.
+- Run straight after `ticket-plan`: give a recap of about 5 lines.
 - Run on its own: explain the plan in plain words (what changes, why, how we check it) and add one Mermaid diagram.
 
-Show a "Go (Recommended)", "Adjust the plan", "Stop" card only when this skill runs on its own with no key and no instructions. Write `pause` before it and `resume` after it. Run from `talib-ticket-plan`, or with a key, start building at once.
+Show a "Go (Recommended)", "Adjust the plan", "Stop" card only when this skill runs on its own with no key and no instructions. Write `pause` before it and `resume` after it. Run from `ticket-plan`, or with a key, start building at once.
 
 ## 1. Build
 

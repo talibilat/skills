@@ -1,6 +1,6 @@
-# talib ticket conventions
+# Ticket skills conventions
 
-Shared by `talib-ticket-plan`, `talib-ticket-ship` and `talib-bug-reproduced`. Read it once per run.
+Shared by `ticket-plan`, `ticket-ship` and `bug-reproduced`. Read it once per run.
 
 ## Writing
 
@@ -52,7 +52,7 @@ Every file path in the skills is absolute under `~/.agents`, so it works from an
 
 ## Setup values
 
-Read `~/.agents/skills/talib-ticket-plan/references/setup.md` before anything else. It holds the Jira site, cloudId, account id, project keys, status names, repo table, root folder, GitHub org and git identity. If the file is missing, copy `setup.example.md` to `setup.md` in that folder. Fill in what the tools can tell you (`getAccessibleAtlassianResources` for the site and cloudId, `atlassianUserInfo` for the account id, `git remote -v` and `gh auth status` for the rest). Ask the user for anything left, then continue. `setup.md` is private and never committed.
+Read `~/.agents/skills/ticket-plan/references/setup.md` before anything else. It holds the Jira site, cloudId, account id, project keys, status names, repo table, root folder, GitHub org and git identity. If the file is missing, copy `setup.example.md` to `setup.md` in that folder. Fill in what the tools can tell you (`getAccessibleAtlassianResources` for the site and cloudId, `atlassianUserInfo` for the account id, `git remote -v` and `gh auth status` for the rest). Ask the user for anything left, then continue. `setup.md` is private and never committed.
 
 ## Companion skills
 

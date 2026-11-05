@@ -1,4 +1,4 @@
-# Setup for the talib ticket skills
+# Setup for the ticket skills
 
 Copy this file to `setup.md` in the same folder and fill it in. If `setup.md` is missing, the skill fills what it can from your Jira and git tools and asks you for the rest. `setup.md` is private and git-ignored.
 

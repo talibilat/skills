@@ -7,7 +7,7 @@ The plan lives in `.scratch/<KEY>-plan.md`. The same text is shown in chat. Bloc
 ```
 # <KEY> plan: <ticket summary>
 
-Repeat bug: no            (talib-bug-reproduced sets this to yes and adds the two sections below)
+Repeat bug: no            (bug-reproduced sets this to yes and adds the two sections below)
 Budget: <estimate or 4h>   Plan estimate: <hours>   Jira estimate: <hours or none>
 Repos: <repo list>
 

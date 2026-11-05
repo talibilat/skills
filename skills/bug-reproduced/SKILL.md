@@ -1,23 +1,23 @@
 ---
-name: talib-bug-reproduced
-description: Plan a Jira bug that came back after earlier work (a reopened ticket, a new ticket for the same problem, or a regression of a past fix). Searches Jira, PR, git and archive history, reproduces the bug on current dev, says why it came back, and writes a plan that builds on the old work. Use when the user says a bug is back, reproduced, reopened or a repeat, or when talib-ticket-plan finds earlier work on a ticket. Hands off to talib-ticket-ship.
+name: bug-reproduced
+description: Plan a Jira bug that came back after earlier work (a reopened ticket, a new ticket for the same problem, or a regression of a past fix). Searches Jira, PR, git and archive history, reproduces the bug on current dev, says why it came back, and writes a plan that builds on the old work. Use when the user says a bug is back, reproduced, reopened or a repeat, or when ticket-plan finds earlier work on a ticket. Hands off to ticket-ship.
 ---
 
-# talib-bug-reproduced
+# bug-reproduced
 
-Same flow as `talib-ticket-plan`, plus a history check and a different plan. Read these first:
+Same flow as `ticket-plan`, plus a history check and a different plan. Read these first:
 
-1. `~/.agents/skills/talib-ticket-plan/references/conventions.md`
-2. `~/.agents/skills/talib-ticket-plan/SKILL.md`, the steps you follow below
-3. `~/.agents/skills/talib-ticket-plan/references/plan-template.md`
+1. `~/.agents/skills/ticket-plan/references/conventions.md`
+2. `~/.agents/skills/ticket-plan/SKILL.md`, the steps you follow below
+3. `~/.agents/skills/ticket-plan/references/plan-template.md`
 
 If you are not Claude Code inside T3, read the "Using these skills from another agent" table in that file first and swap the tools as it says.
 
-Input: the new ticket key, and optionally the old key. With a key, run in autopilot: ask nothing and follow the Autopilot section of the conventions file. The user's message with the call outranks everything here. With no key, start at step 1 of `talib-ticket-plan` and let the user pick.
+Input: the new ticket key, and optionally the old key. With a key, run in autopilot: ask nothing and follow the Autopilot section of the conventions file. The user's message with the call outranks everything here. With no key, start at step 1 of `ticket-plan` and let the user pick.
 
 ## Steps
 
-Run these in order. Steps marked "as in plan" are the same steps as in `talib-ticket-plan`.
+Run these in order. Steps marked "as in plan" are the same steps as in `ticket-plan`.
 
 1. **Free check and claim.** As in plan, steps 2 and 3 (second fetch, T3 chat search, claim, confirm, rename the chat to the key). The "earlier work" hit from step 2.3 is expected here, so skip the Repeat bug card.
 2. **Ticket file.** As in plan, step 4.1.
@@ -37,7 +37,7 @@ Run these in order. Steps marked "as in plan" are the same steps as in `talib-ti
    - **Why it came back.** The verdict, and the evidence.
 9. **Jira link.** If the new and old tickets have no link, add "Relates" with `createIssueLink`. Use `getIssueLinkTypes` for the exact name.
 10. **Show it.** As in plan, step 9, with one extra line at the top of the brief: "This is a repeat of <old key>."
-11. **Hand off.** As in plan, step 10. When calling `talib-ticket-ship`, say it is a repeat bug and give the old key and PR number. Ship then adds the "Earlier work" line to the Jira comment and the PR body.
+11. **Hand off.** As in plan, step 10. When calling `ticket-ship`, say it is a repeat bug and give the old key and PR number. Ship then adds the "Earlier work" line to the Jira comment and the PR body.
 
 ## History search
 
