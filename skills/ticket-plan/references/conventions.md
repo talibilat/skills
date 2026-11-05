@@ -45,7 +45,7 @@ The skills are written for Claude Code inside T3. In Codex, Cursor or any other 
 | Choose a model | Sonnet 5.5, medium effort | The smallest capable model the agent offers. A bigger one needs the user's approval |
 | Rename the chat | `t3_thread_update` | Skip. Tell the user the name to use |
 | Search or message other chats | `t3_thread_search`, `t3_thread_read`, `t3_thread_send` | Skip. Rely on the branch, worktree and PR search |
-| Watch the PR | `watch_pull_request` | Post the PR link and ask the user to say "check the PR" when CI is done. Never poll |
+| Watch the PR | `watch_pull_request` | The agent's scheduler, running the status script from `closeout.md` at its cadence. With no scheduler, post the PR link and ask the user to say "check the PR". Never loop |
 | Jira | Atlassian connector tools | Any Jira tool the agent has. With none, stop and tell the user. Do not guess ticket data |
 
 Every file path in the skills is absolute under `~/.agents`, so it works from any agent.
@@ -138,7 +138,7 @@ Use absolute paths and `git -C <path>` everywhere. The shell resets its folder b
 - Give agents file paths, not pasted text. Keep briefs short.
 - Reviewers read only the diff, the plan and the files the diff touches.
 - At most 3 agents run at once.
-- Never poll. Start the agents, then end the turn. Their completion wakes the chat.
+- Never poll agents. Start them, then end the turn. Their completion wakes the chat. PR and CI watching follows `closeout.md` in the ticket-ship skill.
 - Replace a failed agent once with a fresh agent plus a 5-line note on what failed and what is done. A second failure on the same piece stops the work and asks the user.
 
 ## Time
@@ -169,4 +169,4 @@ Stop and ask before any of these:
 
 ## Never ask
 
-Do these without asking: assign the ticket to me, move it to In Progress or Code Review, log work, post the PR comment in Jira, push the ticket branch, open the PR, delete the ticket worktree after archiving it. Anything else that leaves this Mac asks first.
+Do these without asking: assign the ticket to me, move it to In Progress or Code Review, log work, post the PR comment in Jira, push the ticket branch, open the PR, delete the ticket worktree after archiving it, install a missing proof tool (browser, Playwright, HTTP client, screenshot tool) outside the repo, push the `evidence/<KEY>` branch, and reply to and resolve the review threads you fixed. Anything else that leaves this Mac asks first.

@@ -1,6 +1,6 @@
 ---
 name: ticket-ship
-description: Build a planned Jira ticket with parallel Sonnet sub-agents in its worktree, re-check the bug, run four reviewers (pstack interrogate, postwork, ponytail-review, thermo-nuclear) and score the result out of 100, require a passing live test (browser or real run, or steps for the user), loop on fixes, then raise the PR, comment in Jira, archive the worktree, wait for the PR to be good and move the ticket to Code Review with a worklog. Use after ticket-plan, or when the user asks to implement or ship a ticket that already has a plan in .scratch.
+description: Build a planned Jira ticket with parallel Sonnet sub-agents in its worktree, re-check the bug, run four reviewers (pstack interrogate, postwork, ponytail-review, thermo-nuclear) and score the result out of 100, require a passing live test (browser or real run, or steps for the user), loop on fixes, then raise the PR with screenshot or API proof, comment in Jira, archive the worktree, watch the PR cheaply until it is merged (CI every 10 minutes, then approvals and comments every hour, resolving every comment), and move the ticket to Code Review with a worklog. Use after ticket-plan, or when the user asks to implement or ship a ticket that already has a plan in .scratch.
 ---
 
 # ticket-ship
@@ -51,7 +51,7 @@ Run the baseline commands again. Every command must do at least as well as the b
 
 ## 4. Live test
 
-Nothing passes without a live test. Follow `references/live-test.md`. Run the changed behavior for real in a browser or a running service and record steps, expected results and actual results in `.scratch/<KEY>-live-test.md`. When the agent cannot run it, give the user numbered steps with the expected result and wait. Unit tests, lint and builds never count. A FAIL goes back into the phase 2 plan. The verdict is valid for one commit only.
+Nothing passes without a live test. Follow `references/live-test.md`. Run the changed behavior for real in a browser or a running service and record steps, expected results and actual results in `.scratch/<KEY>-live-test.md`. When the agent cannot run it, give the user numbered steps with the expected result and wait. Unit tests, lint and builds never count. Every step needs proof: a screenshot for UI changes, a screenshot of the browser inspector or response for things only visible there, or a real API call transcript otherwise. Install any missing proof tool outside the repo. A FAIL goes back into the phase 2 plan. The verdict is valid for one commit only.
 
 ## 5. Review loop
 
@@ -65,7 +65,7 @@ The loop ends when the combined score is 100, postwork says PASS, and the live t
 
 ## 6. Close out
 
-Follow `references/closeout.md`. Do not start it without a PASS in `<KEY>-live-test.md` for the current commit. In order: push, PR, Jira comment, archive, delete the worktree, wait for the PR to be good, then Code Review and the worklog.
+Follow `references/closeout.md`. Do not start it without a PASS in `<KEY>-live-test.md` for the current commit. It ends only when the PR is merged. In order: publish proof, push, open the PR, comment in Jira, archive and delete the worktree, watch the PR with the cheap status script, fix CI, resolve every comment, move the ticket to Code Review and log work, then keep watching until it merges.
 
 ## Never
 
@@ -73,5 +73,6 @@ Follow `references/closeout.md`. Do not start it without a PASS in `<KEY>-live-t
 - Never edit outside the plan's files without a written reason.
 - Never run a bigger model without a card.
 - Never call the work done below 100.
-- Never pass, push or open a PR without a live test PASS on the current commit.
-- Never poll an agent or CI.
+- Never pass, push or open a PR without a live test PASS and proof on the current commit.
+- Never merge the PR yourself.
+- Never poll an agent. Watch PRs only the way `references/closeout.md` says.

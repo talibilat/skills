@@ -22,12 +22,11 @@ Never test against production. Shared or staging systems need the user's OK firs
    ```
    Commit: <sha>   Mode: agent browser | agent run | user run   Date: <UTC>
    Setup: <commands, data used>
-   | Step | Expected | Actual | Result |
-   Evidence: <screenshot and log paths>
+   | Step | Expected | Actual | Result | Evidence file |
    Verdict: PASS | FAIL   Decided by: agent | user
    ```
 
-5. The verdict is PASS only if every step matches. Any mismatch is FAIL.
+5. The verdict is PASS only if every step matches and every step has an evidence file. Any mismatch or missing proof is FAIL.
 
 A FAIL is handled like a verified Critical finding. It goes into the phase 2 plan, it counts as a failed review round, and the round limits in `review-loop.md` apply.
 
@@ -43,6 +42,23 @@ Where: <worktree path>   Start it with: <command>
 ```
 
 Then show a card: "Passed", "Failed (I'll describe what I saw)", "I can't run it". "I can't run it" keeps the ticket blocked. Stop and ask what to do. Write `resume` after the answer.
+
+## Evidence (required)
+
+Proof that the change works locally is required for every ticket. Pick the first kind that fits.
+
+| The change is | Proof |
+|---|---|
+| Visible in the UI | A screenshot of each step's result in the running app. For a bug reproduced in the UI, a before screenshot too. |
+| Not visible, but can be inspected in a browser (a network call, the console, storage, response JSON, a rendered file) | A screenshot of the browser inspector panel or the file or response itself. |
+| Backend, API, worker, CLI or data | A real call with `curl` or the real client. Save the full request, the status and the response body as text. Add a screenshot of the output when a screenshot tool exists. |
+
+Rules:
+
+- Save proof in `.scratch/<KEY>-evidence/`, named `<step>-<what>.png` or `.txt`. At most 8 images, each under 1 MB.
+- Remove secrets, tokens, emails and personal data before saving. Crop or redact.
+- Proof must show the real changed behavior on the final commit. Unit test output does not count.
+- If a proof tool is missing, install it outside the repo and carry on. Examples: `npx playwright install chromium` for a browser, `brew install httpie` for HTTP calls. `screencapture -x` is built into macOS. Never add a tool to the repo's dependencies or lockfile. Tell the user in one line what you installed.
 
 ## Staleness
 

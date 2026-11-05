@@ -46,7 +46,7 @@ No two subparts own the same file. Independent subparts run in parallel.
 <New tests, the repro test, and the commands that must pass.>
 
 ## Live test
-<Mode: agent browser, agent run, or user run, and why. Setup commands and data. Numbered steps, each with the action and the expected result. Include the bug's failing action and one nearby flow that must still work. Never production.>
+<Mode: agent browser, agent run, or user run, and why. Setup commands and data. Numbered steps, each with the action and the expected result. Include the bug's failing action and one nearby flow that must still work. Never production. For each step, say what proof to capture: a UI screenshot, a screenshot of the browser inspector or response, or an API call transcript.>
 
 ## Risks
 <From blast-radius: what the change could break, with callers checked.>
