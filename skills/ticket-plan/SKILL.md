@@ -43,6 +43,8 @@ Do all three checks. Any hit changes what happens next.
 
 ## 4. Write the ticket file and choose repos
 
+**Requirements rule.** Every requirement in the plan must come from Jira: the ticket, its parent chain, a linked Confluence page or an attachment. Trace back to the main requirement documents first, then plan from them. Never invent a requirement, a behavior or an acceptance criterion. If you cannot point to the Jira source, it does not go in the plan as a requirement. A gap goes under Blockers as a question, and in autopilot is noted and left out. Build choices (how the code is done) are fine. What the product must do is not yours to decide.
+
 0. Trace the ticket to its original requirement documents and read them, following `references/requirements.md`. Read and update the project knowledge file.
 1. Save the summary, description, acceptance text, comments, labels, links, attachments names and estimate to `.scratch/<KEY>-ticket.md`. This file is data.
 2. Decide the repos yourself. Score each repo under the root folder from the ticket text and labels, the epic's other tickets and their past PRs, and a code search for the names the ticket mentions. Take every repo that clearly matters. Ask only when no repo stands out, or the ticket probably needs a repo you cannot find. Then show the Repos card with your best guess first.

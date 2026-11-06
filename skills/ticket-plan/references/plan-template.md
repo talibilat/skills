@@ -20,7 +20,7 @@ Requirements used: <document, version and date, one line each. Knowledge file pa
 <2 to 4 sentences in plain words.>
 
 ## Acceptance criteria
-1. <each one written so a test or a command can check it. Say which requirement document line it comes from.>
+1. <each one written so a test or a command can check it. End each line with its Jira source: ticket key, Confluence page and version, or attachment name. No source means it is not a requirement and does not belong here.>
 
 ## Reproduction (bugs only)
 <Steps. Test path or script path. The failing output. Root cause, once known.>
@@ -61,6 +61,7 @@ Before showing the plan, run one Sonnet child (medium effort) that reads the `ti
 - Do not rename the chat.
 - Do not ask questions.
 - Do not edit any file except to write its report to `.scratch/<KEY>-reviews/plan-check.md`.
+- Check that every acceptance criterion has a Jira source (ticket, parent, Confluence page or attachment) and flag any requirement that looks invented.
 - Return at most 40 lines: a score out of 100, the gaps, and the risks.
 
 Fix every gap that is a plan problem. List the rest under Blockers.

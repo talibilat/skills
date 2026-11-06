@@ -66,7 +66,7 @@ Read `~/.agents/skills/ticket-plan/references/setup.md` before anything else. It
 
 ## Requirements come first
 
-Before planning, building or reviewing, trace the ticket back to its original requirement documents and read them. Follow `~/.agents/skills/ticket-plan/references/requirements.md`. It says how to find the documents, choose between versions, and keep the project knowledge file up to date. Update that file every time a search turns up something new.
+Before planning, building or reviewing, trace the ticket back to its original requirement documents and read them. Follow `~/.agents/skills/ticket-plan/references/requirements.md`. It says how to find the documents, choose between versions, and keep the project knowledge file up to date. Update that file every time a search turns up something new. Plan only requirements that exist in Jira. Never invent one.
 
 ## Quality bar
 

@@ -19,7 +19,7 @@ Requirement documents often exist in several versions.
 - Order the versions by date and version number. The newest approved one wins. Say which one you used and its date.
 - A later ticket, comment or change request can override a document. Record the override and where it came from.
 - When two sources disagree and nothing says which is newer, that is a conflict. Write it under Blockers in the plan. In autopilot, take the newest source and flag the conflict in the PR and the Jira comment. The QA verdict "Needs BA input" is for conflicts that change what gets built.
-- Never invent a requirement. A gap is written as a gap.
+- Never invent a requirement. Every requirement in a plan, build or review must be traceable to Jira (ticket, parent chain, Confluence page or attachment) with the source named. A gap is written as a gap, not filled in.
 
 ## Keep project knowledge
 
