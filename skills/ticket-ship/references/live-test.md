@@ -5,6 +5,7 @@ Nothing passes without one. Unit tests, lint and builds do not count. A live tes
 ## Pick the mode
 
 1. **The agent runs it (preferred).**
+   - Aruva: use the `ttl` skill. It starts a private copy of the app (a lane) from the worktree, so parallel agents never share ports or data, and it has commands for login, screenshots and API calls. Give the lane back with `lane down` when the test ends.
    - Web UI: open the running app in a browser the agent controls and click through the steps. In T3, use the preview tools (`preview_open`, `preview_navigate`, `preview_act`, `preview_snapshot`). Load them with `ToolSearch`, and take screenshots as evidence. In other agents, use the agent's own browser tool.
    - API, worker or CLI: start the service from the worktree with the command in its README, against local or test data. Call it with `curl` or the real client. Save status codes and response bodies.
    - Docs or config change: follow the written steps literally and check the result.

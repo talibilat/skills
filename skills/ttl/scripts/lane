@@ -1,0 +1,529 @@
+#!/usr/bin/env bash
+# lane: give each agent its own small, isolated copy of Aruva ("a lane") next to a shared base stack.
+# Run `lane help` for usage. Config: ${TTL_CONFIG:-$HOME/.config/ttl/aruva.env}.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG="${TTL_CONFIG:-$HOME/.config/ttl/aruva.env}"
+[ -f "$CONFIG" ] || { echo "lane: no config at $CONFIG (see references/setup.md)" >&2; exit 2; }
+# shellcheck disable=SC1090
+set -a; . "$CONFIG"; set +a
+: "${LANES_HOME:?}" "${BASE_PROJECT:?}" "${BASE_DIR:?}" "${BE_BASE_IMAGE:?}" "${AI_BASE_IMAGE:?}" "${FE_BASE_IMAGE:?}"
+PORT_BASE="${PORT_BASE:-20000}"; MAX_LANES="${MAX_LANES:-6}"; MIN_FREE_MIB="${MIN_FREE_MIB:-1800}"; STALE_HOURS="${STALE_HOURS:-6}"
+BUILD_MIN_FREE_MIB="${BUILD_MIN_FREE_MIB:-4000}"; BUILD_WAIT_MIN="${BUILD_WAIT_MIN:-45}"
+mkdir -p "$LANES_HOME"
+
+die() { echo "lane: $*" >&2; exit 1; }
+say() { echo "lane: $*" >&2; }
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+lane_dir() { echo "$LANES_HOME/lane-$1"; }
+need_lane() { [ -n "${1:-}" ] && [ -f "$(lane_dir "$1")/lane.json" ] || die "lane ${1:-?} does not exist (lane ls)"; }
+
+ports() { # N -> exports FE AI API PG QD QDG NEO_HTTP NEO_BOLT
+  local b=$((PORT_BASE + $1 * 100))
+  FE=$b; AI=$((b + 10)); API=$((b + 80)); PG=$((b + 32)); QD=$((b + 33)); QDG=$((b + 34)); NEO_HTTP=$((b + 74)); NEO_BOLT=$((b + 87))
+}
+
+dc() { # N compose-args...  (compose wrapper for one lane)
+  local n="$1"; shift
+  local d; d="$(lane_dir "$n")"
+  local profiles=kag
+  [ "$(jq -r .split "$d/lane.json")" = true ] && profiles=kag,split
+  COMPOSE_PROFILES="$profiles" OTEL_ENABLED=false docker compose -p "lane-$n" -f "$d/compose.yml" "$@"
+}
+
+touch_lane() { local f; f="$(lane_dir "$1")/lane.json"; [ -f "$f" ] && jq --arg t "$(now)" '.last_used=$t' "$f" > "$f.tmp" && mv "$f.tmp" "$f"; }
+
+docker_free_mib() {
+  local total used
+  total=$(( $(docker info --format '{{.MemTotal}}') / 1048576 ))
+  used=$(docker stats --no-stream --format '{{.MemUsage}}' | awk '{v=$1; m=1; if (v ~ /GiB/) m=1024; else if (v ~ /KiB/) m=1/1024; else if (v ~ /B$/ && v !~ /iB/) m=1/1048576; gsub(/[A-Za-z]/,"",v); s+=v*m} END{printf "%d", s}')
+  echo $((total - used))
+}
+
+# --- shared services -------------------------------------------------------------------------
+# The base stack's stateless services (parser, extractor, PII) join each lane's own default network
+# under a `shared-<service>` alias. Lanes never share a network with each other, so a name such as
+# `api` or `postgres` can only ever resolve to the lane's own container.
+SHARED_SERVICES="doc-parser-lb content-extractor-lb presidio-analyzer presidio-anonymizer presidio-image-redactor"
+shared_cid() {
+  docker ps -q --filter "label=com.docker.compose.project=$BASE_PROJECT" --filter "label=com.docker.compose.service=$1" | head -1
+}
+check_shared() {
+  local svc
+  for svc in $SHARED_SERVICES; do
+    [ -n "$(shared_cid "$svc")" ] || die "base stack '$BASE_PROJECT' has no running '$svc'. Start it first (see references/setup.md)."
+  done
+}
+connect_shared() { # N
+  local net="lane-$1_default" svc cid
+  docker network inspect "$net" >/dev/null 2>&1 || die "network $net does not exist yet"
+  for svc in $SHARED_SERVICES; do
+    cid=$(shared_cid "$svc"); [ -n "$cid" ] || die "base service '$svc' is not running"
+    if ! docker inspect "$cid" --format '{{json .NetworkSettings.Networks}}' | jq -e --arg n "$net" 'has($n)' >/dev/null; then
+      docker network connect --alias "shared-$svc" "$net" "$cid"
+    fi
+  done
+}
+disconnect_shared() { # N
+  local net="lane-$1_default" svc cid
+  docker network inspect "$net" >/dev/null 2>&1 || return 0
+  for svc in $SHARED_SERVICES; do
+    cid=$(shared_cid "$svc"); [ -n "$cid" ] && docker network disconnect -f "$net" "$cid" >/dev/null 2>&1 || true
+  done
+}
+
+# --- build lock -------------------------------------------------------------------------------
+# One image build at a time across all lanes, and only with enough free Docker memory. A frontend
+# build needs several GB; building two at once starved Docker and broke name lookups in other lanes.
+BUILD_LOCK="$LANES_HOME/.build-lock"
+with_build_lock() { # cmd...
+  local waited=0
+  while ! mkdir "$BUILD_LOCK" 2>/dev/null; do
+    local holder; holder=$(cat "$BUILD_LOCK/pid" 2>/dev/null || echo "")
+    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$BUILD_LOCK"; continue; fi
+    [ $waited -eq 0 ] && say "another lane is building (pid ${holder:-?}); waiting"
+    sleep 20; waited=$((waited + 20))
+    [ $waited -lt $((BUILD_WAIT_MIN * 60)) ] || die "gave up waiting for the build lock after $BUILD_WAIT_MIN min"
+  done
+  echo $$ > "$BUILD_LOCK/pid"
+  waited=0
+  while [ "$(docker_free_mib)" -lt "$BUILD_MIN_FREE_MIB" ]; do
+    [ $waited -eq 0 ] && say "waiting for ${BUILD_MIN_FREE_MIB} MiB free Docker memory before building (now $(docker_free_mib))"
+    sleep 30; waited=$((waited + 30))
+    if [ $waited -ge $((BUILD_WAIT_MIN * 60)) ]; then rm -rf "$BUILD_LOCK"; die "not enough free Docker memory to build; free a lane or raise Docker's memory"; fi
+  done
+  local rc=0; "$@" || rc=$?
+  rm -rf "$BUILD_LOCK"
+  return $rc
+}
+
+# --- compose files for one lane --------------------------------------------------------------
+write_compose() { # N be_dir ai_dir fe_dir be_build ai_build fe_build split
+  local n="$1" be="$2" ai="$3" fe="$4" beb="$5" aib="$6" feb="$7" split="$8"
+  local d; d="$(lane_dir "$n")"; ports "$n"
+  local role=all; [ "$split" = true ] && role=api
+
+  local be_img="$BE_BASE_IMAGE" be_build_block="    build: !reset null
+    pull_policy: never"
+  if [ "$beb" = true ]; then be_img="lane-$n-uok-be:local"; be_build_block=""; fi
+
+  local worker_block="" w
+  for w in worker-syllabus-ai worker-kag worker-media worker-runtime worker-light; do
+    worker_block+="  $w:
+    container_name: !reset null
+    profiles: [split]
+    image: $be_img
+$( [ "$beb" = true ] || echo "    build: !reset null
+    pull_policy: never" )
+    depends_on: !override
+      api: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    environment:
+      <<: *lane-env
+"
+  done
+
+  cat > "$d/be.override.yml" <<YAML
+# Generated by lane for lane-$n. Do not edit; rerun \`lane up\`.
+x-lane-env: &lane-env
+  FRONTEND_URL: http://localhost:$FE
+  APP_URL: http://localhost:$API
+  OAUTH_CALLBACK_BASE_URL: http://localhost:$API
+  UOK_AI_URL: http://ai-backend:8000
+  NEO4J_URI: bolt://neo4j:7687
+  DOC_PARSER_URL: http://shared-doc-parser-lb:8002
+  CONTENT_EXTRACTOR_URL: http://shared-content-extractor-lb:8003
+  PRESIDIO_ANALYZER_API_BASE: http://shared-presidio-analyzer:3000
+  PRESIDIO_IMAGE_REDACTOR_API_BASE: http://shared-presidio-image-redactor:3000
+  OTEL_ENABLED: "false"
+  SENTRY_DSN: ""
+  AUTH_LOGIN_DIRECT_ACCESS: allow
+  AUTH_ACCOUNT_LIMIT_LOGIN: "0"
+  AUTH_ACCOUNT_LIMIT_TOTP_VERIFY: "0"
+  AUTH_ACCOUNT_LIMIT_EMAIL_DISPATCH: "0"
+  AUTH_ACCOUNT_LIMIT_SIGN_UP: "0"
+  AUTH_ACCOUNT_LIMIT_RESET_PASSWORD: "0"
+  AUTH_ACCOUNT_CAPTCHA_THRESHOLD: "0"
+  REFRESH_COOKIE_SECURE: "false"
+services:
+  postgres:
+    container_name: !reset null
+    ports: !override ["127.0.0.1:$PG:5432"]
+  redis:
+    container_name: !reset null
+  api:
+    container_name: !reset null
+    image: $be_img
+$be_build_block
+    ports: !override ["127.0.0.1:$API:3000"]
+    depends_on: !override
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    environment:
+      <<: *lane-env
+      PROCESS_ROLE: $role
+$worker_block  neo4j:
+    container_name: !reset null
+    ports: !override ["127.0.0.1:$NEO_HTTP:7474", "127.0.0.1:$NEO_BOLT:7687"]
+    environment:
+      NEO4J_AUTH: neo4j/\${NEO4J_PASSWORD}
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_pagecache_size: 128m
+  # Stateless services come from the base stack over the shared network; never start them per lane.
+  doc-parser: {profiles: [never]}
+  doc-parser-lb: {profiles: [never]}
+  content-extractor: {profiles: [never]}
+  content-extractor-lb: {profiles: [never]}
+  presidio-analyzer: {profiles: [never]}
+  presidio-anonymizer: {profiles: [never]}
+  presidio-image-redactor: {profiles: [never]}
+networks:
+  aruva_network: !override
+    name: lane-${n}_aruva_network
+YAML
+
+  local ai_build_block="    build: !reset null
+    image: $AI_BASE_IMAGE
+    pull_policy: never"
+  [ "$aib" = true ] && ai_build_block="    image: lane-$n-ai-backend:local"
+  cat > "$d/ai.override.yml" <<YAML
+# Generated by lane for lane-$n.
+services:
+  ai-backend:
+    container_name: !reset null
+$ai_build_block
+    env_file: !override ["$BASE_DIR/uok-ai/.env"]
+    ports: !override ["127.0.0.1:$AI:8000"]
+    environment:
+      - API_BASE_URL=http://localhost:$AI
+      - BACKEND_API_URL=http://api:3000/api/v1
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/uok?schema=public
+      - OTEL_ENABLED=false
+      - SENTRY_DSN=
+  qdrant:
+    container_name: !reset null
+    ports: !override ["127.0.0.1:$QD:6333", "127.0.0.1:$QDG:6334"]
+networks:
+  aruva_network: !override
+    name: lane-${n}_aruva_network
+YAML
+
+  local fe_build_block="    build: !reset null
+    image: $FE_BASE_IMAGE
+    pull_policy: never"
+  [ "$feb" = true ] && fe_build_block="    image: lane-$n-frontend:local
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:$API
+        INTERNAL_API_URL: http://api:3000"
+  cat > "$d/fe.override.yml" <<YAML
+# Generated by lane for lane-$n.
+services:
+  frontend:
+    container_name: !reset null
+$fe_build_block
+    ports: !override ["127.0.0.1:$FE:3000"]
+    environment:
+      INTERNAL_API_URL: http://api:3000
+      FRONTEND_URL: http://localhost:$FE
+      OTEL_ENABLED: "false"
+      SENTRY_DSN: ""
+  bff-redis:
+    container_name: !reset null
+networks:
+  aruva_network: !override
+    name: lane-${n}_aruva_network
+YAML
+
+  cat > "$d/compose.yml" <<YAML
+# Generated by lane for lane-$n. Compose project lane-$n.
+name: lane-$n
+include:
+  - path: ["$be/docker-compose.yml", "$d/be.override.yml"]
+    env_file: ["$BASE_DIR/uok-be/.env"]
+  - path: ["$ai/docker-compose.yml", "$d/ai.override.yml"]
+    env_file: ["$BASE_DIR/uok-ai/.env"]
+  - path: ["$fe/docker-compose.yml", "$d/fe.override.yml"]
+    env_file: ["$BASE_DIR/uok-fe/.env"]
+YAML
+}
+
+# --- commands --------------------------------------------------------------------------------
+usage() {
+  cat <<'EOF'
+lane up <label> [--be DIR] [--ai DIR] [--fe DIR] [--split] [--owner TEXT] [--force]
+    Claim a free lane, start it and seed test accounts. --be/--ai/--fe build that repo from a worktree;
+    repos you leave out reuse the base dev image. --split runs the five backend workers as separate
+    containers (default: one backend process does API + all workers). Prints the lane number and URLs.
+lane ls                         All lanes: number, label, owner, age, state, URLs.
+lane info <N> [--json]          URLs, ports, worktrees and test accounts for lane N.
+lane login <N> <email> [pw]     Print an API access token for that account (handles admin TOTP).
+lane totp <N> <email>           Print the current TOTP code for an enrolled admin (for browser login).
+lane shot <N> <path> <out.png> [--as EMAIL]   Log in through the real UI and screenshot <path>.
+lane flow <N> <name> [args]     Run a scripted UI journey with numbered screenshots (flows/: foundation).
+lane proof <N> <label>          Print the proof folder for this lane and label (creates it).
+lane logs <N> [service] [-f]    Service logs (default: api).
+lane exec <N> <compose args>    Run any docker compose command against lane N.
+lane rebuild <N> [be|ai|fe]...  Rebuild and restart the named services from their worktrees.
+lane repair <N>                 Re-attach the base stack's shared services (after the base stack was recreated).
+lane touch <N>                  Mark lane N as in use (resets its stale timer).
+lane down <N>                   Stop lane N, delete its data, volumes and built images, free the number.
+lane sweep [--hours H] [--yes]  Remove lanes unused for H hours (default STALE_HOURS). Dry run without --yes.
+lane doctor                     Check config, base stack, shared network, memory and ports.
+EOF
+}
+
+cmd_up() {
+  local label="" be="" ai="" fe="" split=false owner="${LANE_OWNER:-}" force=false
+  label="${1:-}"; [ -n "$label" ] && [ "${label#--}" = "$label" ] || die "usage: lane up <label> [...]"; shift
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --be) be="$(cd "$2" && pwd)"; shift 2;;
+      --ai) ai="$(cd "$2" && pwd)"; shift 2;;
+      --fe) fe="$(cd "$2" && pwd)"; shift 2;;
+      --split) split=true; shift;;
+      --owner) owner="$2"; shift 2;;
+      --force) force=true; shift;;
+      *) die "unknown option $1";;
+    esac
+  done
+  local beb=false aib=false feb=false
+  [ -n "$be" ] && beb=true || be="$BASE_DIR/uok-be"
+  [ -n "$ai" ] && aib=true || ai="$BASE_DIR/uok-ai"
+  [ -n "$fe" ] && feb=true || fe="$BASE_DIR/uok-fe"
+  for f in "$be/docker-compose.yml" "$ai/docker-compose.yml" "$fe/docker-compose.yml"; do [ -f "$f" ] || die "missing $f"; done
+
+  if [ "$force" != true ]; then
+    local free; free=$(docker_free_mib)
+    [ "$free" -ge "$MIN_FREE_MIB" ] || die "Docker has ${free} MiB free, below MIN_FREE_MIB=${MIN_FREE_MIB}. Run 'lane ls' and 'lane sweep', or pass --force."
+  fi
+  check_shared
+
+  # Claim the lowest free number. mkdir is atomic, so two agents can never claim the same lane.
+  local n=""
+  for i in $(seq 1 "$MAX_LANES"); do
+    if mkdir "$(lane_dir "$i")" 2>/dev/null; then n=$i; break; fi
+  done
+  [ -n "$n" ] || die "all $MAX_LANES lanes are taken (lane ls). Free one with 'lane down N' or 'lane sweep'."
+  local d; d="$(lane_dir "$n")"; ports "$n"
+  for p in $FE $AI $API $PG $QD $QDG $NEO_HTTP $NEO_BOLT; do
+    if lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then rmdir "$d"; die "port $p for lane $n is already in use by another program"; fi
+  done
+  jq -n --arg label "$label" --arg owner "$owner" --arg t "$(now)" --argjson n "$n" \
+    --arg be "$be" --arg ai "$ai" --arg fe "$fe" --argjson beb "$beb" --argjson aib "$aib" --argjson feb "$feb" --argjson split "$split" \
+    --argjson fe_port "$FE" --argjson api_port "$API" --argjson ai_port "$AI" --argjson pg_port "$PG" --argjson qd_port "$QD" --argjson neo_port "$NEO_HTTP" \
+    '{lane:$n,label:$label,owner:$owner,created:$t,last_used:$t,state:"starting",split:$split,
+      repos:{be:{dir:$be,built:$beb},ai:{dir:$ai,built:$aib},fe:{dir:$fe,built:$feb}},
+      urls:{frontend:"http://localhost:\($fe_port)",api:"http://localhost:\($api_port)",ai:"http://localhost:\($ai_port)",
+            postgres:"postgresql://postgres:postgres@127.0.0.1:\($pg_port)/uok",qdrant:"http://localhost:\($qd_port)",neo4j:"http://localhost:\($neo_port)"}}' > "$d/lane.json"
+  mkdir -p "$d/logs"
+  write_compose "$n" "$be" "$ai" "$fe" "$beb" "$aib" "$feb" "$split"
+  say "claimed lane $n for '$label' (frontend http://localhost:$FE, api http://localhost:$API)"
+
+  set_state() { jq --arg s "$1" '.state=$s' "$d/lane.json" > "$d/lane.json.tmp" && mv "$d/lane.json.tmp" "$d/lane.json"; }
+  local log="$d/logs/up.log"
+  dc "$n" config -q >>"$log" 2>&1 || { set_state failed; die "generated compose is invalid, see $log"; }
+  {
+    local builds=()
+    [ "$beb" = true ] && builds+=(api)
+    [ "$aib" = true ] && builds+=(ai-backend)
+    [ "$feb" = true ] && builds+=(frontend)
+    if [ ${#builds[@]} -gt 0 ]; then
+      say "building ${builds[*]} (log: $log)"; set_state building
+      with_build_lock dc "$n" build "${builds[@]}" >>"$log" 2>&1 || { set_state failed; die "build failed, see $log"; }
+      set_state starting
+    fi
+    say "starting databases"
+    dc "$n" up -d --wait postgres redis >>"$log" 2>&1 || { set_state failed; die "postgres/redis did not start, see $log"; }
+    connect_shared "$n"
+    say "migrating and seeding test accounts (about 1-2 minutes)"
+    dc "$n" run --rm --no-deps -T -e SUPERADMIN_EMAIL=e2e-admin@example.com -e SUPERADMIN_PASSWORD='Test123!' \
+      -e ORGANIZATION_NAME='E2E Test Organization' api sh -c "npx prisma migrate deploy && npx -y tsx@4.19.2 prisma/seed-e2e.ts" >>"$log" 2>&1 \
+      || { set_state failed; die "seed failed, see $log"; }
+    say "starting the rest"
+    dc "$n" up -d --wait --wait-timeout 600 >>"$log" 2>&1 || { set_state failed; die "services did not become healthy, see $log and 'lane logs $n'"; }
+  }
+  local ok=false
+  for _ in $(seq 1 60); do
+    if curl -fsS -o /dev/null "http://localhost:$FE/login" && curl -fsS -o /dev/null "http://localhost:$API/health" && curl -fsS -o /dev/null "http://localhost:$AI/api/v1/health"; then ok=true; break; fi
+    sleep 5
+  done
+  [ "$ok" = true ] || { set_state failed; die "lane $n started but health checks fail; see 'lane logs $n'"; }
+  set_state up
+  touch_lane "$n"
+  say "lane $n is up"
+  cmd_info "$n"
+}
+
+cmd_info() {
+  need_lane "$1"; local d; d="$(lane_dir "$1")"
+  if [ "${2:-}" = --json ]; then cat "$d/lane.json"; return; fi
+  jq -r '"lane \(.lane)  label=\(.label)  owner=\(.owner)  state=\(.state)  split=\(.split)",
+    "  frontend  \(.urls.frontend)",
+    "  api       \(.urls.api)   (health: /health)",
+    "  ai        \(.urls.ai)    (health: /api/v1/health)",
+    "  postgres  \(.urls.postgres)",
+    "  qdrant    \(.urls.qdrant)   neo4j \(.urls.neo4j)",
+    "  backend   \(.repos.be.dir)\(if .repos.be.built then " (built)" else " (base image)" end)",
+    "  ai repo   \(.repos.ai.dir)\(if .repos.ai.built then " (built)" else " (base image)" end)",
+    "  frontend  \(.repos.fe.dir)\(if .repos.fe.built then " (built)" else " (base image)" end)"' "$d/lane.json"
+  echo "  accounts  professor e2e-professor@example.com / Test123! (no 2FA); student test@example.com / password123;"
+  echo "            admin e2e-admin@example.com / Test123! (TOTP: lane totp $1 <email>). Full list: references/accounts.md"
+}
+
+cmd_ls() {
+  local any=false f
+  for f in "$LANES_HOME"/lane-*/lane.json; do
+    [ -f "$f" ] || continue; any=true
+    local n running
+    n=$(jq -r .lane "$f")
+    running=$(docker ps -q --filter "label=com.docker.compose.project=lane-$n" | wc -l | tr -d ' ')
+    jq -r --arg r "$running" '"lane \(.lane)  \(.state)  containers=\($r)  label=\(.label)  owner=\(.owner)  last_used=\(.last_used)  \(.urls.frontend)"' "$f"
+  done
+  for d in "$LANES_HOME"/lane-*; do [ -d "$d" ] && [ ! -f "$d/lane.json" ] && echo "$(basename "$d")  claiming (no lane.json yet)"; done
+  [ "$any" = true ] || echo "no lanes"
+  echo "docker free memory: $(docker_free_mib) MiB (MIN_FREE_MIB=$MIN_FREE_MIB)"
+}
+
+cmd_down() {
+  local n="${1:-}"; [ -n "$n" ] || die "usage: lane down <N>"
+  local d; d="$(lane_dir "$n")"
+  [ -d "$d" ] || die "lane $n does not exist"
+  disconnect_shared "$n"
+  if [ -f "$d/compose.yml" ]; then
+    dc "$n" --profile split --profile never down -v --remove-orphans --rmi local >/dev/null 2>&1 || true
+  fi
+  # Belt and braces: anything still labelled with this project.
+  docker ps -aq --filter "label=com.docker.compose.project=lane-$n" | xargs -r docker rm -f >/dev/null 2>&1 || true
+  docker volume ls -q --filter "label=com.docker.compose.project=lane-$n" | xargs -r docker volume rm >/dev/null 2>&1 || true
+  docker network ls -q --filter "label=com.docker.compose.project=lane-$n" | xargs -r docker network rm >/dev/null 2>&1 || true
+  for img in "lane-$n-uok-be:local" "lane-$n-ai-backend:local" "lane-$n-frontend:local"; do docker rmi "$img" >/dev/null 2>&1 || true; done
+  # Keep proofs: move them out of the lane folder before deleting it.
+  if [ -d "$d/proof" ] && [ -n "$(ls -A "$d/proof" 2>/dev/null)" ]; then
+    mkdir -p "$LANES_HOME/proofs"; cp -R "$d/proof/." "$LANES_HOME/proofs/"
+  fi
+  rm -rf "$d"
+  say "lane $n removed (containers, volumes, networks, lane images). Proofs kept in $LANES_HOME/proofs"
+}
+
+cmd_sweep() {
+  local hours="$STALE_HOURS" yes=false
+  while [ $# -gt 0 ]; do case "$1" in --hours) hours="$2"; shift 2;; --yes) yes=true; shift;; *) die "unknown option $1";; esac; done
+  local cutoff; cutoff=$(( $(date +%s) - hours * 3600 ))
+  local f n last ts stale=0
+  for f in "$LANES_HOME"/lane-*/lane.json; do
+    [ -f "$f" ] || continue
+    n=$(jq -r .lane "$f"); last=$(jq -r .last_used "$f")
+    ts=$(date -j -u -f %Y-%m-%dT%H:%M:%SZ "$last" +%s 2>/dev/null || date -u -d "$last" +%s)
+    if [ "$ts" -lt "$cutoff" ]; then
+      stale=$((stale + 1))
+      if [ "$yes" = true ]; then cmd_down "$n"; else echo "would remove lane $n (last used $last)"; fi
+    fi
+  done
+  # Half-claimed folders (crash between mkdir and lane.json) older than 30 minutes.
+  for d in "$LANES_HOME"/lane-*; do
+    [ -d "$d" ] && [ ! -f "$d/lane.json" ] || continue
+    if [ -n "$(find "$d" -maxdepth 0 -mmin +30)" ]; then
+      if [ "$yes" = true ]; then rm -rf "$d"; say "removed half-claimed $(basename "$d")"; else echo "would remove half-claimed $(basename "$d")"; fi
+    fi
+  done
+  [ "$stale" -gt 0 ] || say "no lanes older than $hours h"
+}
+
+cmd_login() {
+  need_lane "$1"; ports "$1"; touch_lane "$1"
+  QA_BE="http://127.0.0.1:$API" TOTP_STORE="$(lane_dir "$1")/.totp-secrets.json" python3 "$SCRIPT_DIR/lane-login.py" "${@:2}"
+}
+
+cmd_totp() {
+  need_lane "$1"
+  TOTP_STORE="$(lane_dir "$1")/.totp-secrets.json" python3 "$SCRIPT_DIR/lane-login.py" --totp "$2"
+}
+
+cmd_proof() {
+  need_lane "$1"; [ -n "${2:-}" ] || die "usage: lane proof <N> <label>"
+  local p; p="$(lane_dir "$1")/proof/$2"; mkdir -p "$p"; echo "$p"
+}
+
+cmd_shot() {
+  need_lane "$1"; ports "$1"; touch_lane "$1"
+  local n="$1" path="$2" out="$3"; shift 3
+  local as="e2e-professor@example.com"
+  while [ $# -gt 0 ]; do case "$1" in --as) as="$2"; shift 2;; *) die "unknown option $1";; esac; done
+  LANE_FE="http://localhost:$FE" LANE_N="$n" LANE_DIR="$(lane_dir "$n")" LANE_SCRIPTS="$SCRIPT_DIR" \
+    node "$SCRIPT_DIR/shot.mjs" "$path" "$out" "$as"
+}
+
+cmd_flow() {
+  need_lane "${1:-}"; [ -n "${2:-}" ] || die "usage: lane flow <N> <name> [flow args]  (flows: $(ls "$SCRIPT_DIR/flows" | sed 's/\.mjs$//' | tr '\n' ' '))"
+  local n="$1" name="$2"; shift 2; ports "$n"; touch_lane "$n"
+  [ -f "$SCRIPT_DIR/flows/$name.mjs" ] || die "no flow '$name' in $SCRIPT_DIR/flows"
+  local proof; proof="$(lane_dir "$n")/proof/flow-$name-$(date +%Y%m%d-%H%M%S)"
+  say "proof folder: $proof"
+  LANE_FE="http://localhost:$FE" LANE_N="$n" LANE_DIR="$(lane_dir "$n")" LANE_SCRIPTS="$SCRIPT_DIR" PROOF_DIR="$proof" \
+    node "$SCRIPT_DIR/flows/$name.mjs" "$@"
+}
+
+cmd_logs() {
+  need_lane "$1"; local n="$1" svc="${2:-api}"; shift; [ $# -gt 0 ] && shift
+  dc "$n" logs --no-color --tail 200 "$@" "$svc"
+}
+
+cmd_rebuild() {
+  need_lane "$1"; local n="$1"; shift; touch_lane "$n"
+  local d; d="$(lane_dir "$n")"; local svcs=()
+  for r in "$@"; do
+    case "$r" in
+      be) [ "$(jq -r .repos.be.built "$d/lane.json")" = true ] || die "backend uses the base image in lane $n; start a new lane with --be"; svcs+=(api); [ "$(jq -r .split "$d/lane.json")" = true ] && svcs+=(worker-syllabus-ai worker-kag worker-media worker-runtime worker-light);;
+      ai) [ "$(jq -r .repos.ai.built "$d/lane.json")" = true ] || die "ai uses the base image in lane $n; start a new lane with --ai"; svcs+=(ai-backend);;
+      fe) [ "$(jq -r .repos.fe.built "$d/lane.json")" = true ] || die "frontend uses the base image in lane $n; start a new lane with --fe"; svcs+=(frontend);;
+      *) die "rebuild takes be, ai or fe";;
+    esac
+  done
+  [ ${#svcs[@]} -gt 0 ] || die "usage: lane rebuild <N> be|ai|fe ..."
+  connect_shared "$n"
+  with_build_lock dc "$n" build "${svcs[@]}"
+  dc "$n" up -d --wait --wait-timeout 600 "${svcs[@]}"
+}
+
+cmd_doctor() {
+  echo "config: $CONFIG"
+  echo "lanes home: $LANES_HOME"
+  for img in "$BE_BASE_IMAGE" "$AI_BASE_IMAGE" "$FE_BASE_IMAGE"; do
+    docker image inspect "$img" >/dev/null 2>&1 && echo "ok   base image $img" || echo "FAIL base image $img missing"
+  done
+  for svc in $SHARED_SERVICES; do
+    [ -n "$(docker ps -q --filter "label=com.docker.compose.project=$BASE_PROJECT" --filter "label=com.docker.compose.service=$svc")" ] \
+      && echo "ok   base service $svc running" || echo "FAIL base service $svc not running in $BASE_PROJECT"
+  done
+  for r in uok-be uok-ai uok-fe; do [ -f "$BASE_DIR/$r/.env" ] && echo "ok   $r .env present" || echo "FAIL $BASE_DIR/$r/.env missing"; done
+  command -v node >/dev/null && echo "ok   node $(node -v)" || echo "FAIL node missing (needed for lane shot)"
+  [ -d "$SCRIPT_DIR/node_modules/playwright-core" ] && echo "ok   playwright-core installed" || echo "FAIL run: npm --prefix $SCRIPT_DIR install"
+  echo "docker free memory: $(docker_free_mib) MiB (MIN_FREE_MIB=$MIN_FREE_MIB)"
+}
+
+sub="${1:-help}"; [ $# -gt 0 ] && shift
+case "$sub" in
+  up) cmd_up "$@";;
+  ls|list) cmd_ls;;
+  info) cmd_info "$@";;
+  login) cmd_login "$@";;
+  totp) cmd_totp "$@";;
+  shot) cmd_shot "$@";;
+  proof) cmd_proof "$@";;
+  logs) cmd_logs "$@";;
+  flow) cmd_flow "$@";;
+  exec) need_lane "${1:-}"; n="$1"; shift; touch_lane "$n"; dc "$n" "$@";;
+  rebuild) cmd_rebuild "$@";;
+  repair) need_lane "${1:-}"; check_shared; connect_shared "$1"; say "lane $1: shared services attached";;
+  touch) need_lane "${1:-}"; touch_lane "$1";;
+  down) cmd_down "$@";;
+  sweep) cmd_sweep "$@";;
+  doctor) cmd_doctor;;
+  help|-h|--help) usage;;
+  *) usage; exit 2;;
+esac
